@@ -3,8 +3,15 @@ use tokio::io::AsyncReadExt;
 
 use crate::http::parser::{parse_http_request, ParseError};
 use crate::http::request::Request;
-use crate::http::response::Response;
 use crate::http::writer::ResponseWriter;
+
+use std::path::{Path, PathBuf};
+use tokio::fs;
+
+use crate::http::mime::content_type;
+use crate::http::request::Method;
+use crate::http::response::{Response, ResponseBuilder, StatusCode};
+
 
 pub struct Connection {
     stream: TcpStream,
@@ -15,7 +22,7 @@ pub struct Connection {
 pub enum ConnectionState {
     Reading,
     Processing(Request),
-    Writing(ResponseWriter, bool), // bool = keep_alive?
+    Writing(Response, bool), // Response and keep_alive?
     Closed,
 }
 
@@ -30,30 +37,36 @@ impl Connection {
 
     pub async fn run(&mut self) -> anyhow::Result<()> {
         loop {
-            match &mut self.state {
+            match std::mem::replace(&mut self.state, ConnectionState::Reading) {
                 ConnectionState::Reading => {
+                    tracing::debug!("Connection state: Reading");
                     match self.read_request().await? {
                         Some(req) => {
+                            tracing::info!("Received request: {:?} {}", req.method, req.path);
                             self.state = ConnectionState::Processing(req);
                         }
                         None => {
+                            tracing::debug!("Client closed connection");
                             self.state = ConnectionState::Closed;
                         }
                     }
                 }
 
                 ConnectionState::Processing(req) => {
+                    tracing::debug!("Connection state: Processing");
                     // TEMP handler (real routing comes later)
-                    let (response, keep_alive) = Self::handle_request(req);
-
-                    let writer = ResponseWriter::new(&response);
-                    self.state = ConnectionState::Writing(writer, keep_alive);
+                    let (response, keep_alive) = Self::handle_request(&req).await;
+                    tracing::info!("Sending response: {}", response.status.as_u16());
+                    self.state = ConnectionState::Writing(response, keep_alive);
                 }
 
-                ConnectionState::Writing(writer, keep_alive) => {
+                ConnectionState::Writing(response, keep_alive) => {
+                    tracing::debug!("Connection state: Writing");
+                    let mut writer = ResponseWriter::new(&response);
                     writer.write_to_stream(&mut self.stream).await?;
+                    tracing::debug!("Response written, keep_alive: {}", keep_alive);
 
-                    if *keep_alive {
+                    if keep_alive {
                         self.state = ConnectionState::Reading; // go back for next request
                     } else {
                         self.state = ConnectionState::Closed;
@@ -61,6 +74,7 @@ impl Connection {
                 }
 
                 ConnectionState::Closed => {
+                    tracing::debug!("Connection state: Closed");
                     break;
                 }
             }
@@ -102,11 +116,55 @@ impl Connection {
         }
     }
 
-    fn handle_request(req: &Request) -> (Response, bool) {
-        let response = Response::ok("Hello from Sentinel\n");
-        // Determine if client wants to keep the connection alive
-        let keep_alive = req.keep_alive(); // uses header "Connection: keep-alive"
-        (response, keep_alive)
+    async fn handle_request(req: &Request) -> (Response, bool) {
+        let keep_alive = req.keep_alive();
+
+        // Only GET supported
+        if req.method != Method::GET {
+            return (
+                ResponseBuilder::new(StatusCode::MethodNotAllowed)
+                    .body(b"405 Method Not Allowed".to_vec())
+                    .build(),
+                keep_alive,
+            );
+        }
+
+        // Normalize path
+        let mut path = req.path.clone();
+        if path == "/" {
+            path = "/index.html".to_string();
+        }
+
+        // Prevent path traversal
+        if path.contains("..") {
+            return (
+                ResponseBuilder::new(StatusCode::BadRequest)
+                    .body(b"400 Bad Request".to_vec())
+                    .build(),
+                keep_alive,
+            );
+        }
+
+        let full_path: PathBuf = Path::new("public").join(&path[1..]);
+
+        match fs::read(&full_path).await {
+            Ok(contents) => {
+                let mime = content_type(&path);
+                let response = ResponseBuilder::new(StatusCode::Ok)
+                    .header("Content-Type", mime)
+                    .body(contents)
+                    .build();
+
+                (response, keep_alive)
+            }
+
+            Err(_) => (
+                ResponseBuilder::new(StatusCode::NotFound)
+                    .body(b"404 Not Found".to_vec())
+                    .build(),
+                keep_alive,
+            ),
+        }
     }
 }
 

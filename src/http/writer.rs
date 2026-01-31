@@ -19,15 +19,35 @@ fn serialize_response(resp: &Response) -> Vec<u8> {
     );
     buf.extend_from_slice(status_line.as_bytes());
 
-    // Headers
+    let mut has_len = false;
+    let mut has_conn = false;
+
     for (k, v) in &resp.headers {
+        if k.eq_ignore_ascii_case("content-length") {
+            has_len = true;
+        }
+        if k.eq_ignore_ascii_case("connection") {
+            has_conn = true;
+        }
+
         buf.extend_from_slice(k.as_bytes());
         buf.extend_from_slice(b": ");
         buf.extend_from_slice(v.as_bytes());
         buf.extend_from_slice(b"\r\n");
     }
 
-    // Header/body separator
+    // REQUIRED headers
+    if !has_len {
+        buf.extend_from_slice(
+            format!("Content-Length: {}\r\n", resp.body.len()).as_bytes()
+        );
+    }
+
+    if !has_conn {
+        buf.extend_from_slice(b"Connection: close\r\n");
+    }
+
+    // End headers
     buf.extend_from_slice(b"\r\n");
 
     // Body
@@ -35,6 +55,7 @@ fn serialize_response(resp: &Response) -> Vec<u8> {
 
     buf
 }
+
 
 pub struct ResponseWriter {
     buffer: Vec<u8>,

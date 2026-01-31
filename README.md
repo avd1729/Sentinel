@@ -250,39 +250,6 @@ The next phase will add:
 - Error handling for backend failures
 - Request/response timing metrics
 
-## Troubleshooting
-
-### Server won't start
-
-**Issue**: "Address already in use"
-
-**Solution**: 
-```bash
-# Find and kill existing process
-taskkill /IM sentinel.exe /F  # Windows
-# or
-killall sentinel              # Linux/Mac
-
-# Or use a different port
-LISTEN=127.0.0.1:8081 cargo run
-```
-
-### Tests failing
-
-**Solution**: Ensure you're in the project root and running:
-```bash
-cargo test --all
-```
-
-### No response from server
-
-**Issue**: Server started but requests timeout
-
-**Solution**:
-1. Verify server is listening: `netstat -an | findstr 8080` (Windows)
-2. Check logs for errors
-3. Ensure `public/index.html` exists for GET requests
-
 ## Performance Considerations
 
 - Async I/O with Tokio for handling thousands of concurrent connections
@@ -301,26 +268,6 @@ Key dependencies:
 
 See `Cargo.toml` for full dependency list.
 
-## Contributing
-
-To contribute to Sentinel:
-
-1. Create a feature branch: `git checkout -b feature/your-feature`
-2. Write tests for new functionality
-3. Ensure all tests pass: `cargo test`
-4. Format code: `cargo fmt`
-5. Check for issues: `cargo clippy`
-6. Submit a pull request
-
-## License
-
-[Your License Here]
-
-## Contact
-
-[Your Contact Info]
-
----
 
 **Current Status**: Phase 1 - HTTP Core ✅  
 **Last Updated**: January 31, 2026

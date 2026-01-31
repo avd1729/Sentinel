@@ -15,7 +15,7 @@ pub struct Connection {
 pub enum ConnectionState {
     Reading,
     Processing(Request),
-    Writing(ResponseWriter),
+    Writing(ResponseWriter, bool), // bool = keep_alive?
     Closed,
 }
 
@@ -44,15 +44,20 @@ impl Connection {
 
                 ConnectionState::Processing(req) => {
                     // TEMP handler (real routing comes later)
-                    let response = Self::handle_request(req);
+                    let (response, keep_alive) = Self::handle_request(req);
 
                     let writer = ResponseWriter::new(&response);
-                    self.state = ConnectionState::Writing(writer);
+                    self.state = ConnectionState::Writing(writer, keep_alive);
                 }
 
-                ConnectionState::Writing(writer) => {
+                ConnectionState::Writing(writer, keep_alive) => {
                     writer.write_to_stream(&mut self.stream).await?;
-                    self.state = ConnectionState::Closed;
+
+                    if *keep_alive {
+                        self.state = ConnectionState::Reading; // go back for next request
+                    } else {
+                        self.state = ConnectionState::Closed;
+                    }
                 }
 
                 ConnectionState::Closed => {
@@ -97,8 +102,11 @@ impl Connection {
         }
     }
 
-    fn handle_request(_req: &Request) -> Response {
-        Response::ok("Hello from Sentinel\n")
+    fn handle_request(req: &Request) -> (Response, bool) {
+        let response = Response::ok("Hello from Sentinel\n");
+        // Determine if client wants to keep the connection alive
+        let keep_alive = req.keep_alive(); // uses header "Connection: keep-alive"
+        (response, keep_alive)
     }
 }
 

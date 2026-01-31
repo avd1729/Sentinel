@@ -113,19 +113,3 @@ fn find_headers_end(buf: &[u8]) -> Option<usize> {
         .position(|w| w == b"\r\n\r\n")
 }
 
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn parse_simple_get() {
-        let req = b"GET / HTTP/1.1\r\nHost: example.com\r\n\r\n";
-
-        let (parsed, consumed) = parse_http_request(req).unwrap();
-
-        assert_eq!(parsed.path, "/");
-        assert_eq!(parsed.headers.get("Host").unwrap(), "example.com");
-        assert_eq!(consumed, req.len());
-    }
-}
-

@@ -1,5 +1,6 @@
 use tokio::net::TcpListener;
 use tracing::info;
+use crate::http::connection::Connection;
 
 pub async fn run(addr: &str) -> anyhow::Result<()> {
     let listener = TcpListener::bind(addr).await?;
@@ -10,7 +11,10 @@ pub async fn run(addr: &str) -> anyhow::Result<()> {
         info!("Accepted connection from {}", peer);
 
         tokio::spawn(async move {
-            drop(socket);
+            let mut conn = Connection::new(socket);
+            if let Err(e) = conn.run().await {
+                tracing::error!("Connection error from {}: {}", peer, e);
+            }
         });
     }
 }

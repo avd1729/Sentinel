@@ -42,6 +42,14 @@ pub struct ResponseWriter {
 }
 
 impl ResponseWriter {
+
+    pub fn new(response: &Response) -> Self {
+        Self {
+            buffer: serialize_response(response),
+            written: 0,
+        }
+    }
+
     pub async fn write_to_stream(
         &mut self,
         stream: &mut TcpStream,

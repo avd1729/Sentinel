@@ -1,15 +1,47 @@
 use crate::http::request::{Method, Request};
 use std::collections::HashMap;
 
+/// Errors that can occur during HTTP request parsing.
 #[derive(Debug)]
 pub enum ParseError {
+    /// The request line or headers are malformed
     InvalidRequest,
+    /// The HTTP method is not recognized
     InvalidMethod,
+    /// A header line is malformed
     InvalidHeader,
+    /// Content-Length header value is not a valid number
     InvalidContentLength,
+    /// The request is incomplete and more data is needed
     Incomplete,
 }
 
+/// Parses an HTTP request from a byte buffer.
+///
+/// This function attempts to parse a complete HTTP request from the given buffer.
+/// It expects the buffer to contain a request line, headers, a blank line separator,
+/// and optionally a body.
+///
+/// # Arguments
+///
+/// * `buf` - The byte buffer containing the HTTP request data
+///
+/// # Returns
+///
+/// - `Ok((Request, usize))` - A successfully parsed request and the number of bytes consumed
+/// - `Err(ParseError::Incomplete)` - Not enough data for a complete request
+/// - `Err(ParseError::*)` - Various parsing errors for invalid HTTP
+///
+/// # Example
+///
+/// ```ignore
+/// let request_data = b"GET / HTTP/1.1\r\nHost: localhost\r\n\r\n";
+/// match parse_http_request(request_data) {
+///     Ok((req, consumed)) => println!("Parsed: {} {}", req.method, req.path),
+///     Err(ParseError::Incomplete) => println!("Need more data"),
+///     Err(e) => println!("Parse error: {:?}", e),
+/// }
+/// ```
 pub fn parse_http_request(buf: &[u8]) -> Result<(Request, usize), ParseError> {
 
     // Look for header/body separator

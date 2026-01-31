@@ -247,13 +247,12 @@ impl Connection {
 
     /// Handles an HTTP request and generates an appropriate response.
     ///
-    /// This is a simple static file server implementation that:
-    /// - Only accepts GET requests (returns 405 for other methods)
-    /// - Serves files from the `./public` directory
-    /// - Redirects `/` to `/index.html`
-    /// - Prevents directory traversal attacks (blocks `..` in paths)
-    /// - Sets appropriate `Content-Type` headers based on file extension
-    /// - Returns 404 for missing files
+    /// Currently serves files from the `./public` directory as a temporary implementation.
+    /// In Phase 2, this will be replaced with backend proxying logic to forward requests
+    /// to configured backend servers based on the routing configuration.
+    ///
+    /// Supports all HTTP methods (GET, POST, PUT, DELETE, etc.) and will forward them
+    /// appropriately once backend connection handling is implemented.
     ///
     /// # Arguments
     ///
@@ -276,16 +275,9 @@ impl Connection {
     async fn handle_request(req: &Request) -> (Response, bool) {
         let keep_alive = req.keep_alive();
 
-        // Only GET supported
-        if req.method != Method::GET {
-            return (
-                ResponseBuilder::new(StatusCode::MethodNotAllowed)
-                    .body(b"405 Method Not Allowed".to_vec())
-                    .build(),
-                keep_alive,
-            );
-        }
-
+        // TODO: Phase 2 - Replace with backend proxying logic
+        // For now, serve static files from ./public directory
+        
         // Normalize path
         let mut path = req.path.clone();
         if path == "/" {

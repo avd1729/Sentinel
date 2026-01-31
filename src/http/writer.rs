@@ -1,5 +1,7 @@
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
+use tokio::time::{timeout, Duration};
+const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 
 use crate::http::response::{Response, StatusCode};
 
@@ -40,21 +42,20 @@ pub struct ResponseWriter {
 }
 
 impl ResponseWriter {
-    pub fn new(response: &Response) -> Self {
-        Self {
-            buffer: serialize_response(response),
-            written: 0,
-        }
-    }
-
     pub async fn write_to_stream(
         &mut self,
         stream: &mut TcpStream,
     ) -> anyhow::Result<()> {
         while self.written < self.buffer.len() {
-            let n = stream
-                .write(&self.buffer[self.written..])
-                .await?;
+            let write_fut = stream.write(&self.buffer[self.written..]);
+
+            let n = match timeout(WRITE_TIMEOUT, write_fut).await {
+                Ok(Ok(n)) => n,
+                Ok(Err(e)) => return Err(e.into()),
+                Err(_) => {
+                    return Err(anyhow::anyhow!("write timed out"));
+                }
+            };
 
             if n == 0 {
                 return Err(anyhow::anyhow!("connection closed while writing"));
@@ -66,6 +67,7 @@ impl ResponseWriter {
         Ok(())
     }
 }
+
 
 
 

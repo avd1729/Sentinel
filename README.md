@@ -41,12 +41,17 @@ cargo test
 # Start with default configuration (127.0.0.1:8080)
 ./target/release/sentinel
 
-# Start with custom address
+# Start with custom address via environment variable
 LISTEN=0.0.0.0:3000 ./target/release/sentinel
+
+# Use a YAML configuration file
+# Create config.yaml (or copy from config.example.yaml) and run:
+./target/release/sentinel
 ```
 
 The server will start listening and log its status:
 ```
+2026-01-31T16:25:01.632591Z  INFO Loaded configuration from config.yaml
 2026-01-31T16:25:01.632591Z  INFO Listening on 127.0.0.1:8080
 ```
 
@@ -97,6 +102,8 @@ sentinel/
 │   └── test_response.rs
 ├── public/                 # Static files for serving
 │   └── index.html
+├── config.yaml            # Server configuration
+├── config.example.yaml    # Example configuration
 ├── Cargo.toml             # Project manifest
 └── README.md              # This file
 ```
@@ -161,10 +168,12 @@ cargo clippy
 ### Server Capabilities
 
 - ✅ Async TCP listener (Tokio-based)
-- ✅ Static file serving from `./public` directory
+- ✅ YAML-based configuration system
+- ✅ Static file serving from configurable directory
+- ✅ Configurable default index file
 - ✅ Automatic MIME type detection
 - ✅ Structured logging with tracing
-- ✅ Configuration via environment variables
+- ✅ Configuration via YAML file or environment variables
 - ✅ Graceful shutdown on Ctrl+C
 
 ### Testing
@@ -177,7 +186,38 @@ cargo clippy
 
 ## Configuration
 
-Sentinel uses environment variables for configuration:
+Sentinel supports multiple configuration methods, with the following priority:
+
+1. **YAML Configuration File** (highest priority)
+2. **Environment Variables**
+3. **Default Values** (lowest priority)
+
+### YAML Configuration
+
+Create a `config.yaml` file in the project root:
+
+```yaml
+# Server listening configuration
+server:
+  listen_addr: "127.0.0.1:8080"
+
+# Static file serving configuration
+static_files:
+  # Root directory for serving static files
+  root: "public"
+  
+  # Default file to serve when a directory is requested
+  index: "index.html"
+  
+  # Enable directory listing (not yet implemented)
+  directory_listing: false
+```
+
+See `config.example.yaml` for more configuration options.
+
+### Environment Variables
+
+If no `config.yaml` is found, environment variables are used:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
@@ -187,6 +227,13 @@ Example:
 ```bash
 LISTEN=0.0.0.0:8080 cargo run
 ```
+
+### Default Configuration
+
+If no config file or environment variables are set, Sentinel uses:
+- Listen address: `127.0.0.1:8080`
+- Static files root: `public`
+- Default index: `index.html`
 
 ## Architecture
 
@@ -262,7 +309,8 @@ The next phase will add:
 Key dependencies:
 
 - **tokio**: Async runtime
-- **serde**: Serialization framework
+- **serde**: Serialization framework  
+- **serde_yaml**: YAML configuration parsing
 - **tracing**: Structured logging
 - **anyhow**: Error handling
 

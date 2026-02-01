@@ -1,0 +1,31 @@
+# Sentinel Web Server Configuration
+
+# Server listening configuration
+server:
+  # Address and port to listen on
+  listen_addr: "127.0.0.1:8080"
+
+# Static file serving configuration
+static_files:
+  # Root directory for serving static files
+  root: "public"
+  
+  # Default file to serve when a directory is requested (e.g., '/' -> '/index.html')
+  index: "index.html"
+  
+  # Custom error pages (optional, relative to static root)
+  error_pages:
+    # Custom 404 Not Found page
+    not_found: "errors/404.html"
+    # Custom 400 Bad Request page  
+    bad_request: "errors/400.html"
+  
+  # Enable directory listing (not yet implemented)
+  directory_listing: false
+
+# Examples of paths that will be served:
+# Request: GET /           -> Serves: public/index.html
+# Request: GET /about.html -> Serves: public/about.html
+# Request: GET /css/style.css -> Serves: public/css/style.css
+# Request: GET /api/data.json -> Serves: public/api/data.json
+# Request: GET /notfound   -> Serves: public/errors/404.html (custom error page)

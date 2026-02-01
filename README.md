@@ -9,7 +9,6 @@ A high-performance HTTP web server and reverse proxy written in Rust with async 
 - 📁 **Static File Serving** - Serve static websites with custom error pages
 - 🔄 **HTTP/1.1** - Full request/response handling with keep-alive support
 - 📊 **Structured Logging** - Detailed tracing for debugging and monitoring
-- 🧪 **Well Tested** - 40+ integration and unit tests
 
 ## Current Status
 
@@ -65,8 +64,6 @@ Or use environment variables:
 ```bash
 LISTEN=0.0.0.0:3000 sentinel
 ```
-
-See [config.example.yaml](config.example.yaml) for all options.
 
 ## Development
 

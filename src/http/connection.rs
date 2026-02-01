@@ -11,6 +11,7 @@ use tokio::fs;
 use crate::http::mime::content_type;
 use crate::http::request::Method;
 use crate::http::response::{Response, ResponseBuilder, StatusCode};
+use crate::config::StaticFilesConfig;
 use std::time::Instant;
 
 /// Handles a single HTTP client connection with support for keep-alive and pipelining.
@@ -55,6 +56,7 @@ pub struct Connection {
     buffer: Vec<u8>,
     state: ConnectionState,
     request_start: Option<Instant>,
+    static_config: StaticFilesConfig,
 }
 
 /// Represents the state of an HTTP connection in its processing lifecycle.
@@ -81,6 +83,7 @@ impl Connection {
     /// # Arguments
     ///
     /// * `stream` - The TCP stream connected to the client
+    /// * `static_config` - Configuration for serving static files
     ///
     /// # Returns
     ///
@@ -90,15 +93,16 @@ impl Connection {
     ///
     /// ```ignore
     /// let (socket, _) = listener.accept().await?;
-    /// let mut conn = Connection::new(socket);
+    /// let mut conn = Connection::new(socket, static_config);
     /// conn.run().await?;
     /// ```
-    pub fn new(stream: TcpStream) -> Self {
+    pub fn new(stream: TcpStream, static_config: StaticFilesConfig) -> Self {
         Self {
             stream,
             buffer: Vec::with_capacity(4096),
             state: ConnectionState::Reading,
             request_start: None,
+            static_config,
         }
     }
 
@@ -150,7 +154,7 @@ impl Connection {
                 ConnectionState::Processing(req) => {
                     tracing::debug!("Connection state: Processing");
                     // TEMP handler (real routing comes later)
-                    let (response, keep_alive) = Self::handle_request(&req).await;
+                    let (response, keep_alive) = self.handle_request(&req).await;
                     let status = response.status.as_u16();
                     
                     if let Some(start) = self.request_start.take() {
@@ -272,29 +276,36 @@ impl Connection {
     ///     // Can reuse connection for next request
     /// }
     /// ```
-    async fn handle_request(req: &Request) -> (Response, bool) {
+    async fn handle_request(&self, req: &Request) -> (Response, bool) {
         let keep_alive = req.keep_alive();
 
         // TODO: Phase 2 - Replace with backend proxying logic
-        // For now, serve static files from ./public directory
+        // For now, serve static files based on configuration
         
         // Normalize path
         let mut path = req.path.clone();
         if path == "/" {
-            path = "/index.html".to_string();
+            path = format!("/{}", self.static_config.index);
         }
 
         // Prevent path traversal
         if path.contains("..") {
+            let error_body = if let Some(ref error_page) = self.static_config.error_pages.bad_request {
+                let error_path = self.static_config.root.join(error_page);
+                fs::read(&error_path).await.unwrap_or_else(|_| b"400 Bad Request".to_vec())
+            } else {
+                b"400 Bad Request".to_vec()
+            };
+            
             return (
                 ResponseBuilder::new(StatusCode::BadRequest)
-                    .body(b"400 Bad Request".to_vec())
+                    .body(error_body)
                     .build(),
                 keep_alive,
             );
         }
 
-        let full_path: PathBuf = Path::new("public").join(&path[1..]);
+        let full_path: PathBuf = self.static_config.root.join(&path[1..]);
 
         match fs::read(&full_path).await {
             Ok(contents) => {
@@ -307,12 +318,21 @@ impl Connection {
                 (response, keep_alive)
             }
 
-            Err(_) => (
-                ResponseBuilder::new(StatusCode::NotFound)
-                    .body(b"404 Not Found".to_vec())
-                    .build(),
-                keep_alive,
-            ),
+            Err(_) => {
+                let error_body = if let Some(ref error_page) = self.static_config.error_pages.not_found {
+                    let error_path = self.static_config.root.join(error_page);
+                    fs::read(&error_path).await.unwrap_or_else(|_| b"404 Not Found".to_vec())
+                } else {
+                    b"404 Not Found".to_vec()
+                };
+                
+                (
+                    ResponseBuilder::new(StatusCode::NotFound)
+                        .body(error_body)
+                        .build(),
+                    keep_alive,
+                )
+            }
         }
     }
 }

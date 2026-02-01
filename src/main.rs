@@ -15,7 +15,7 @@ async fn main() -> anyhow::Result<()>{
     let cfg = Config::load();
 
     tokio::select! {
-        res = server::listener::run(&cfg.listen_addr) => {
+        res = server::listener::run(&cfg) => {
             res?;
         }
 

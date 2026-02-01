@@ -1,11 +1,11 @@
 mod config;
-mod server;
 mod http;
+mod server;
 
 use config::Config;
 
 #[tokio::main]
-async fn main() -> anyhow::Result<()>{
+async fn main() -> anyhow::Result<()> {
     tracing_subscriber::fmt()
         .with_target(false)
         .with_level(true)

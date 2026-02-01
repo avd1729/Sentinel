@@ -6,7 +6,7 @@ use std::path::PathBuf;
 pub struct Config {
     /// Server listening configuration
     pub server: ServerConfig,
-    
+
     /// Static file serving configuration
     pub static_files: StaticFilesConfig,
 }
@@ -23,14 +23,14 @@ pub struct ServerConfig {
 pub struct StaticFilesConfig {
     /// Root directory for static files
     pub root: PathBuf,
-    
+
     /// Default file to serve for directory requests
     pub index: String,
-    
+
     /// Custom error pages
     #[serde(default)]
     pub error_pages: ErrorPages,
-    
+
     /// Enable or disable directory listings (for future implementation)
     #[serde(default = "default_false")]
     pub directory_listing: bool,
@@ -42,7 +42,7 @@ pub struct ErrorPages {
     /// Custom 404 Not Found page (relative to static root)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub not_found: Option<String>,
-    
+
     /// Custom 400 Bad Request page (relative to static root)
     #[serde(skip_serializing_if = "Option::is_none")]
     pub bad_request: Option<String>,
@@ -67,7 +67,7 @@ impl Config {
         let config: Config = serde_yaml::from_str(&contents)?;
         Ok(config)
     }
-    
+
     /// Load configuration with fallback to defaults
     ///
     /// Tries to load from `config.yaml`, falls back to environment variables,
@@ -78,12 +78,11 @@ impl Config {
             tracing::info!("Loaded configuration from config.yaml");
             return config;
         }
-        
+
         // Fallback to environment variables and defaults
         tracing::info!("Using default configuration");
-        let listen_addr = std::env::var("LISTEN")
-            .unwrap_or_else(|_| "127.0.0.1:8080".to_string());
-        
+        let listen_addr = std::env::var("LISTEN").unwrap_or_else(|_| "127.0.0.1:8080".to_string());
+
         Self {
             server: ServerConfig { listen_addr },
             static_files: StaticFilesConfig {

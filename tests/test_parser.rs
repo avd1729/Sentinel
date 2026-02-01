@@ -1,4 +1,4 @@
-use sentinel::http::parser::{parse_http_request, ParseError};
+use sentinel::http::parser::{ParseError, parse_http_request};
 use sentinel::http::request::Method;
 
 #[test]

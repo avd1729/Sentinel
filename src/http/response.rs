@@ -25,7 +25,7 @@ pub enum StatusCode {
     /// 405 Method Not Allowed
     MethodNotAllowed,
     /// 500 Internal Server Error
-    InternalServerError
+    InternalServerError,
 }
 
 impl StatusCode {
@@ -174,5 +174,3 @@ impl Response {
             .build()
     }
 }
-
-

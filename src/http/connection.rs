@@ -1,17 +1,17 @@
-use tokio::net::TcpStream;
 use tokio::io::AsyncReadExt;
+use tokio::net::TcpStream;
 
-use crate::http::parser::{parse_http_request, ParseError};
+use crate::http::parser::{ParseError, parse_http_request};
 use crate::http::request::Request;
 use crate::http::writer::ResponseWriter;
 
 use std::path::{Path, PathBuf};
 use tokio::fs;
 
+use crate::config::StaticFilesConfig;
 use crate::http::mime::content_type;
 use crate::http::request::Method;
 use crate::http::response::{Response, ResponseBuilder, StatusCode};
-use crate::config::StaticFilesConfig;
 use std::time::Instant;
 
 /// Handles a single HTTP client connection with support for keep-alive and pipelining.
@@ -156,7 +156,7 @@ impl Connection {
                     // TEMP handler (real routing comes later)
                     let (response, keep_alive) = self.handle_request(&req).await;
                     let status = response.status.as_u16();
-                    
+
                     if let Some(start) = self.request_start.take() {
                         let duration = start.elapsed();
                         tracing::info!(
@@ -167,7 +167,7 @@ impl Connection {
                             "HTTP request completed"
                         );
                     }
-                    
+
                     self.state = ConnectionState::Writing(response, keep_alive);
                 }
 
@@ -281,7 +281,7 @@ impl Connection {
 
         // TODO: Phase 2 - Replace with backend proxying logic
         // For now, serve static files based on configuration
-        
+
         // Normalize path
         let mut path = req.path.clone();
         if path == "/" {
@@ -290,13 +290,16 @@ impl Connection {
 
         // Prevent path traversal
         if path.contains("..") {
-            let error_body = if let Some(ref error_page) = self.static_config.error_pages.bad_request {
-                let error_path = self.static_config.root.join(error_page);
-                fs::read(&error_path).await.unwrap_or_else(|_| b"400 Bad Request".to_vec())
-            } else {
-                b"400 Bad Request".to_vec()
-            };
-            
+            let error_body =
+                if let Some(ref error_page) = self.static_config.error_pages.bad_request {
+                    let error_path = self.static_config.root.join(error_page);
+                    fs::read(&error_path)
+                        .await
+                        .unwrap_or_else(|_| b"400 Bad Request".to_vec())
+                } else {
+                    b"400 Bad Request".to_vec()
+                };
+
             return (
                 ResponseBuilder::new(StatusCode::BadRequest)
                     .body(error_body)
@@ -319,13 +322,16 @@ impl Connection {
             }
 
             Err(_) => {
-                let error_body = if let Some(ref error_page) = self.static_config.error_pages.not_found {
-                    let error_path = self.static_config.root.join(error_page);
-                    fs::read(&error_path).await.unwrap_or_else(|_| b"404 Not Found".to_vec())
-                } else {
-                    b"404 Not Found".to_vec()
-                };
-                
+                let error_body =
+                    if let Some(ref error_page) = self.static_config.error_pages.not_found {
+                        let error_path = self.static_config.root.join(error_page);
+                        fs::read(&error_path)
+                            .await
+                            .unwrap_or_else(|_| b"404 Not Found".to_vec())
+                    } else {
+                        b"404 Not Found".to_vec()
+                    };
+
                 (
                     ResponseBuilder::new(StatusCode::NotFound)
                         .body(error_body)
@@ -336,4 +342,3 @@ impl Connection {
         }
     }
 }
-

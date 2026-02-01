@@ -1,4 +1,4 @@
-use sentinel::http::request::{Request, Method};
+use sentinel::http::request::{Method, Request};
 use std::collections::HashMap;
 
 #[test]

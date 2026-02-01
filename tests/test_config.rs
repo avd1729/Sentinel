@@ -5,24 +5,25 @@ use std::sync::Mutex;
 // Global lock to ensure tests don't interfere with each other
 static TEST_LOCK: Mutex<()> = Mutex::new(());
 
-fn with_no_config_file<F>(test: F) 
+fn with_no_config_file<F>(test: F)
 where
     F: FnOnce(),
 {
     let _lock = TEST_LOCK.lock().unwrap();
-    
+
     // Backup config.yaml if it exists
     let config_exists = fs::metadata("config.yaml").is_ok();
     if config_exists {
         fs::rename("config.yaml", "config.yaml.test_backup").expect("Failed to backup config.yaml");
     }
-    
+
     // Run the test
     test();
-    
+
     // Restore config.yaml
     if config_exists {
-        fs::rename("config.yaml.test_backup", "config.yaml").expect("Failed to restore config.yaml");
+        fs::rename("config.yaml.test_backup", "config.yaml")
+            .expect("Failed to restore config.yaml");
     }
 }
 
@@ -94,7 +95,7 @@ fn test_config_all_interfaces_binding() {
 fn test_config_from_yaml() {
     let _lock = TEST_LOCK.lock().unwrap();
     use std::path::PathBuf;
-    
+
     let yaml_content = r#"
 server:
   listen_addr: "0.0.0.0:9000"
@@ -107,24 +108,30 @@ static_files:
     bad_request: "errors/400.html"
   directory_listing: false
 "#;
-    
+
     fs::write("test_config.yaml", yaml_content).unwrap();
     let cfg = Config::load_from_file("test_config.yaml").unwrap();
-    
+
     assert_eq!(cfg.server.listen_addr, "0.0.0.0:9000");
     assert_eq!(cfg.static_files.root, PathBuf::from("www"));
     assert_eq!(cfg.static_files.index, "home.html");
-    assert_eq!(cfg.static_files.error_pages.not_found, Some("errors/404.html".to_string()));
-    assert_eq!(cfg.static_files.error_pages.bad_request, Some("errors/400.html".to_string()));
+    assert_eq!(
+        cfg.static_files.error_pages.not_found,
+        Some("errors/404.html".to_string())
+    );
+    assert_eq!(
+        cfg.static_files.error_pages.bad_request,
+        Some("errors/400.html".to_string())
+    );
     assert_eq!(cfg.static_files.directory_listing, false);
-    
+
     fs::remove_file("test_config.yaml").unwrap();
 }
 
 #[test]
 fn test_config_yaml_priority() {
     let _lock = TEST_LOCK.lock().unwrap();
-    
+
     let yaml_content = r#"
 server:
   listen_addr: "192.168.1.1:7777"
@@ -134,20 +141,19 @@ static_files:
   index: "test.html"
   directory_listing: false
 "#;
-    
+
     fs::write("test_priority.yaml", yaml_content).unwrap();
-    
+
     unsafe {
         std::env::set_var("LISTEN", "0.0.0.0:9999");
     }
-    
+
     let cfg = Config::load_from_file("test_priority.yaml").unwrap();
     assert_eq!(cfg.server.listen_addr, "192.168.1.1:7777");
     assert_eq!(cfg.static_files.index, "test.html");
-    
+
     unsafe {
         std::env::remove_var("LISTEN");
     }
     fs::remove_file("test_priority.yaml").unwrap();
 }
-

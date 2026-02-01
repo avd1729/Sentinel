@@ -43,14 +43,12 @@ pub enum ParseError {
 /// }
 /// ```
 pub fn parse_http_request(buf: &[u8]) -> Result<(Request, usize), ParseError> {
-
     // Look for header/body separator
     let headers_end = find_headers_end(buf).ok_or(ParseError::Incomplete)?;
     let header_bytes = &buf[..headers_end];
     let body_bytes = &buf[headers_end + 4..];
 
-    let headers_str = std::str::from_utf8(header_bytes)
-        .map_err(|_| ParseError::InvalidRequest)?;
+    let headers_str = std::str::from_utf8(header_bytes).map_err(|_| ParseError::InvalidRequest)?;
 
     let mut lines = headers_str.split("\r\n");
 
@@ -72,20 +70,18 @@ pub fn parse_http_request(buf: &[u8]) -> Result<(Request, usize), ParseError> {
             continue;
         }
 
-        let (key, value) = line
-            .split_once(':')
-            .ok_or(ParseError::InvalidHeader)?;
+        let (key, value) = line.split_once(':').ok_or(ParseError::InvalidHeader)?;
 
-        headers.insert(
-           key.trim().to_string(),
-           value.trim().to_string(),
-        );
+        headers.insert(key.trim().to_string(), value.trim().to_string());
     }
 
     // Body
     let content_length = headers
         .get("Content-Length")
-        .map(|v| v.parse::<usize>().map_err(|_| ParseError::InvalidContentLength))
+        .map(|v| {
+            v.parse::<usize>()
+                .map_err(|_| ParseError::InvalidContentLength)
+        })
         .transpose()?
         .unwrap_or(0);
 
@@ -105,11 +101,8 @@ pub fn parse_http_request(buf: &[u8]) -> Result<(Request, usize), ParseError> {
 
     let total_consumed = headers_end + 4 + content_length;
     Ok((request, total_consumed))
-
 }
 
 fn find_headers_end(buf: &[u8]) -> Option<usize> {
-    buf.windows(4)
-        .position(|w| w == b"\r\n\r\n")
+    buf.windows(4).position(|w| w == b"\r\n\r\n")
 }
-

@@ -19,7 +19,7 @@ pub enum Method {
     /// OPTIONS - Describe communication options
     OPTIONS,
     /// PATCH - Partial modification of a resource
-    PATCH
+    PATCH,
 }
 
 /// Represents a parsed HTTP request from a client.
@@ -88,7 +88,7 @@ impl RequestBuilder {
             path: None,
             version: None,
             headers: HashMap::new(),
-            body: Vec::new()
+            body: Vec::new(),
         }
     }
 
@@ -126,7 +126,6 @@ impl RequestBuilder {
             body: self.body,
         })
     }
-
 }
 
 impl Request {
@@ -140,9 +139,7 @@ impl Request {
     ///
     /// `Some(&str)` with the header value if present, `None` otherwise.
     pub fn header(&self, key: &str) -> Option<&str> {
-        self.headers
-            .get(key)
-            .map(|v| v.as_str())
+        self.headers.get(key).map(|v| v.as_str())
     }
 
     /// Retrieves the Content-Length header value and parses it as a usize.

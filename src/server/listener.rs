@@ -1,7 +1,7 @@
+use crate::config::Config;
+use crate::http::connection::Connection;
 use tokio::net::TcpListener;
 use tracing::info;
-use crate::http::connection::Connection;
-use crate::config::Config;
 
 pub async fn run(cfg: &Config) -> anyhow::Result<()> {
     let listener = TcpListener::bind(&cfg.server.listen_addr).await?;
@@ -10,7 +10,7 @@ pub async fn run(cfg: &Config) -> anyhow::Result<()> {
     loop {
         let (socket, peer) = listener.accept().await?;
         info!("Accepted connection from {}", peer);
-        
+
         let static_config = cfg.static_files.clone();
         tokio::spawn(async move {
             let mut conn = Connection::new(socket, static_config);

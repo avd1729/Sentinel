@@ -1,6 +1,6 @@
 use tokio::io::AsyncWriteExt;
 use tokio::net::TcpStream;
-use tokio::time::{timeout, Duration};
+use tokio::time::{Duration, timeout};
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 
 use crate::http::response::{Response, StatusCode};
@@ -47,9 +47,7 @@ fn serialize_response(resp: &Response) -> Vec<u8> {
 
     // REQUIRED headers
     if !has_len {
-        buf.extend_from_slice(
-            format!("Content-Length: {}\r\n", resp.body.len()).as_bytes()
-        );
+        buf.extend_from_slice(format!("Content-Length: {}\r\n", resp.body.len()).as_bytes());
     }
 
     if !has_conn {
@@ -90,7 +88,6 @@ pub struct ResponseWriter {
 }
 
 impl ResponseWriter {
-
     /// Creates a new ResponseWriter from a Response.
     ///
     /// Serializes the response into HTTP wire format and prepares it for transmission.
@@ -115,10 +112,7 @@ impl ResponseWriter {
     ///
     /// `Ok(())` when all bytes have been successfully written, or an error
     /// if I/O fails or the write times out.
-    pub async fn write_to_stream(
-        &mut self,
-        stream: &mut TcpStream,
-    ) -> anyhow::Result<()> {
+    pub async fn write_to_stream(&mut self, stream: &mut TcpStream) -> anyhow::Result<()> {
         while self.written < self.buffer.len() {
             let write_fut = stream.write(&self.buffer[self.written..]);
 
@@ -140,7 +134,3 @@ impl ResponseWriter {
         Ok(())
     }
 }
-
-
-
-

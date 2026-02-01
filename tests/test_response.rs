@@ -18,8 +18,14 @@ fn test_status_code_reason_phrase() {
     assert_eq!(StatusCode::NoContent.reason_phrase(), "No Content");
     assert_eq!(StatusCode::BadRequest.reason_phrase(), "Bad Request");
     assert_eq!(StatusCode::NotFound.reason_phrase(), "Not Found");
-    assert_eq!(StatusCode::MethodNotAllowed.reason_phrase(), "Method Not Allowed");
-    assert_eq!(StatusCode::InternalServerError.reason_phrase(), "Internal Server Error");
+    assert_eq!(
+        StatusCode::MethodNotAllowed.reason_phrase(),
+        "Method Not Allowed"
+    );
+    assert_eq!(
+        StatusCode::InternalServerError.reason_phrase(),
+        "Internal Server Error"
+    );
 }
 
 #[test]
@@ -76,15 +82,17 @@ fn test_response_builder_multiple_headers() {
         .build();
 
     assert_eq!(response.headers.len(), 4); // 3 custom + 1 auto (Content-Length)
-    assert_eq!(response.headers.get("Content-Type").unwrap(), "application/json");
+    assert_eq!(
+        response.headers.get("Content-Type").unwrap(),
+        "application/json"
+    );
     assert_eq!(response.headers.get("Cache-Control").unwrap(), "no-cache");
     assert_eq!(response.headers.get("X-Frame-Options").unwrap(), "DENY");
 }
 
 #[test]
 fn test_response_builder_empty_body() {
-    let response = ResponseBuilder::new(StatusCode::NoContent)
-        .build();
+    let response = ResponseBuilder::new(StatusCode::NoContent).build();
 
     assert_eq!(response.body.len(), 0);
     assert_eq!(response.headers.get("Content-Length").unwrap(), "0");
@@ -100,9 +108,7 @@ fn test_response_builder_various_status_codes() {
     ];
 
     for status in statuses {
-        let response = ResponseBuilder::new(status)
-            .body(b"test".to_vec())
-            .build();
+        let response = ResponseBuilder::new(status).body(b"test".to_vec()).build();
         assert_eq!(response.status, status);
     }
 }

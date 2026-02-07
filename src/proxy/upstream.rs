@@ -49,52 +49,84 @@ impl ProxyHandler {
     /// 2. Connects to the backend
     /// 3. Forwards the request
     /// 4. Streams the response back
+    /// 5. Retries with other backends if one fails
     pub async fn forward_request(&self, request: &Request) -> Result<Response> {
-        // Select a backend
-        let backend = self
-            .backend_pool
-            .select_backend()
-            .await
-            .context("No available backends")?;
+        let max_retries = self.backend_pool.available_count().await;
+        
+        if max_retries == 0 {
+            anyhow::bail!("No available backends");
+        }
 
-        tracing::debug!(
-            backend = backend.display_name(),
+        let mut last_error = None;
+        
+        // Try up to the number of available backends
+        for attempt in 0..max_retries {
+            // Select a backend
+            let backend = match self.backend_pool.select_backend().await {
+                Some(b) => b,
+                None => {
+                    tracing::error!("No available backends in pool");
+                    break;
+                }
+            };
+
+            tracing::debug!(
+                backend = backend.display_name(),
+                attempt = attempt + 1,
+                max_retries = max_retries,
+                method = ?request.method,
+                path = %request.path,
+                "Forwarding request to backend"
+            );
+
+            // Try to proxy the request
+            match self.proxy_to_backend(&backend, request).await {
+                Ok(response) => {
+                    // Mark backend as successful
+                    self.backend_pool.mark_backend_success(&backend.url).await;
+                    
+                    tracing::info!(
+                        backend = backend.display_name(),
+                        status = response.status.as_u16(),
+                        method = ?request.method,
+                        path = %request.path,
+                        attempt = attempt + 1,
+                        "Request forwarded successfully"
+                    );
+                    
+                    return Ok(response);
+                }
+                Err(e) => {
+                    // Mark backend as failed
+                    self.backend_pool.mark_backend_failed(&backend.url).await;
+                    
+                    tracing::warn!(
+                        backend = backend.display_name(),
+                        error = %e,
+                        method = ?request.method,
+                        path = %request.path,
+                        attempt = attempt + 1,
+                        "Failed to proxy request to backend, will retry with another"
+                    );
+                    
+                    last_error = Some(e);
+                    // Continue to next backend
+                }
+            }
+        }
+        
+        // All backends failed
+        tracing::error!(
             method = ?request.method,
             path = %request.path,
-            "Forwarding request to backend"
+            "All available backends failed"
         );
-
-        // Try to proxy the request
-        match self.proxy_to_backend(&backend, request).await {
-            Ok(response) => {
-                // Mark backend as successful
-                self.backend_pool.mark_backend_success(&backend.url).await;
-                
-                tracing::info!(
-                    backend = backend.display_name(),
-                    status = response.status.as_u16(),
-                    method = ?request.method,
-                    path = %request.path,
-                    "Request forwarded successfully"
-                );
-                
-                Ok(response)
-            }
-            Err(e) => {
-                // Mark backend as failed
-                self.backend_pool.mark_backend_failed(&backend.url).await;
-                
-                tracing::error!(
-                    backend = backend.display_name(),
-                    error = %e,
-                    method = ?request.method,
-                    path = %request.path,
-                    "Failed to proxy request to backend"
-                );
-                
-                // Return appropriate error response
-                self.handle_proxy_error(&e)
-            }
+        
+        // Return error from last attempt
+        if let Some(e) = last_error {
+            self.handle_proxy_error(&e)
+        } else {
+            self.handle_proxy_error(&anyhow::anyhow!("No available backends"))
         }
     }
 
@@ -150,7 +182,9 @@ impl ProxyHandler {
     }
 
     /// Build HTTP request bytes to send to backend
-    fn build_http_request(&self, request: &Request, backend_url: &url::Url) -> Result<Vec<u8>> {
+    /// 
+    /// Note: This method is made public for integration testing purposes
+    pub fn build_http_request(&self, request: &Request, backend_url: &url::Url) -> Result<Vec<u8>> {
         let mut buffer = Vec::new();
 
         // Request line
@@ -353,7 +387,7 @@ impl ProxyHandler {
                 StatusCode::GatewayTimeout,
                 b"504 Gateway Timeout\r\n\r\nThe backend server did not respond in time.".to_vec(),
             )
-        } else if error_str.contains("No available backends") {
+        } else if error_str.contains("No available backends") || error_str.contains("All available backends failed") {
             (
                 StatusCode::ServiceUnavailable,
                 b"503 Service Unavailable\r\n\r\nNo backend servers are available.".to_vec(),
@@ -370,38 +404,5 @@ impl ProxyHandler {
             .with_header("Content-Length", &body.len().to_string())
             .with_body(body)
             .build())
-    }
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use crate::config::BackendConfig;
-    use crate::http::request::{Method, RequestBuilder};
-
-    #[test]
-    fn test_build_http_request() {
-        let handler = ProxyHandler::new(
-            BackendPool::new(vec![]),
-            Duration::from_secs(5),
-            Duration::from_secs(30),
-        );
-
-        let request = RequestBuilder::new()
-            .method(Method::GET)
-            .path("/api/users")
-            .version("HTTP/1.1")
-            .header("User-Agent", "Test")
-            .build()
-            .unwrap();
-
-        let backend_url = url::Url::parse("http://localhost:3000").unwrap();
-        let request_bytes = handler.build_http_request(&request, &backend_url).unwrap();
-        let request_str = String::from_utf8_lossy(&request_bytes);
-
-        assert!(request_str.contains("GET /api/users HTTP/1.1"));
-        assert!(request_str.contains("Host: localhost:3000"));
-        assert!(request_str.contains("User-Agent: Test"));
-        assert!(request_str.contains("Connection: close"));
     }
 }

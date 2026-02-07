@@ -5,13 +5,14 @@ use crate::http::parser::{ParseError, parse_http_request};
 use crate::http::request::Request;
 use crate::http::writer::ResponseWriter;
 
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
+use std::sync::Arc;
 use tokio::fs;
 
 use crate::config::StaticFilesConfig;
 use crate::http::mime::content_type;
-use crate::http::request::Method;
 use crate::http::response::{Response, ResponseBuilder, StatusCode};
+use crate::proxy::ProxyHandler;
 use std::time::Instant;
 
 /// Handles a single HTTP client connection with support for keep-alive and pipelining.
@@ -57,6 +58,7 @@ pub struct Connection {
     state: ConnectionState,
     request_start: Option<Instant>,
     static_config: StaticFilesConfig,
+    proxy_handler: Option<Arc<ProxyHandler>>,
 }
 
 /// Represents the state of an HTTP connection in its processing lifecycle.
@@ -103,6 +105,33 @@ impl Connection {
             state: ConnectionState::Reading,
             request_start: None,
             static_config,
+            proxy_handler: None,
+        }
+    }
+
+    /// Creates a new HTTP connection handler with proxy support.
+    ///
+    /// # Arguments
+    ///
+    /// * `stream` - The TCP stream connected to the client
+    /// * `static_config` - Configuration for serving static files
+    /// * `proxy_handler` - Optional proxy handler for backend forwarding
+    ///
+    /// # Returns
+    ///
+    /// A new `Connection` initialized with the provided stream and proxy handler.
+    pub fn with_proxy(
+        stream: TcpStream,
+        static_config: StaticFilesConfig,
+        proxy_handler: Arc<ProxyHandler>,
+    ) -> Self {
+        Self {
+            stream,
+            buffer: Vec::with_capacity(4096),
+            state: ConnectionState::Reading,
+            request_start: None,
+            static_config,
+            proxy_handler: Some(proxy_handler),
         }
     }
 
@@ -251,12 +280,11 @@ impl Connection {
 
     /// Handles an HTTP request and generates an appropriate response.
     ///
-    /// Currently serves files from the `./public` directory as a temporary implementation.
-    /// In Phase 2, this will be replaced with backend proxying logic to forward requests
-    /// to configured backend servers based on the routing configuration.
+    /// If a proxy handler is configured, requests are forwarded to backend servers.
+    /// Otherwise, serves files from the static files directory.
     ///
     /// Supports all HTTP methods (GET, POST, PUT, DELETE, etc.) and will forward them
-    /// appropriately once backend connection handling is implemented.
+    /// appropriately to configured backend servers.
     ///
     /// # Arguments
     ///
@@ -279,9 +307,31 @@ impl Connection {
     async fn handle_request(&self, req: &Request) -> (Response, bool) {
         let keep_alive = req.keep_alive();
 
-        // TODO: Phase 2 - Replace with backend proxying logic
-        // For now, serve static files based on configuration
+        // If proxy handler is configured, forward to backend
+        if let Some(ref proxy) = self.proxy_handler {
+            match proxy.forward_request(req).await {
+                Ok(response) => {
+                    tracing::debug!(
+                        status = response.status.as_u16(),
+                        "Proxy response received"
+                    );
+                    return (response, keep_alive);
+                }
+                Err(e) => {
+                    tracing::error!(error = %e, "Proxy error");
+                    // Error responses are already handled in ProxyHandler
+                    // This should not normally be reached
+                    return (Response::internal_error(), keep_alive);
+                }
+            }
+        }
 
+        // Otherwise, serve static files
+        self.serve_static_file(req, keep_alive).await
+    }
+
+    /// Serves a static file from the configured static files directory
+    async fn serve_static_file(&self, req: &Request, keep_alive: bool) -> (Response, bool) {
         // Normalize path
         let mut path = req.path.clone();
         if path == "/" {

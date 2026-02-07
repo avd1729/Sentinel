@@ -10,6 +10,9 @@ use std::collections::HashMap;
 /// - `NotFound` (404): Resource not found
 /// - `MethodNotAllowed` (405): HTTP method not supported
 /// - `InternalServerError` (500): Server error
+/// - `BadGateway` (502): Bad response from upstream server
+/// - `ServiceUnavailable` (503): Service temporarily unavailable
+/// - `GatewayTimeout` (504): Upstream server timeout
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum StatusCode {
     /// 200 OK
@@ -26,6 +29,12 @@ pub enum StatusCode {
     MethodNotAllowed,
     /// 500 Internal Server Error
     InternalServerError,
+    /// 502 Bad Gateway
+    BadGateway,
+    /// 503 Service Unavailable
+    ServiceUnavailable,
+    /// 504 Gateway Timeout
+    GatewayTimeout,
 }
 
 impl StatusCode {
@@ -47,6 +56,9 @@ impl StatusCode {
             StatusCode::NotFound => 404,
             StatusCode::MethodNotAllowed => 405,
             StatusCode::InternalServerError => 500,
+            StatusCode::BadGateway => 502,
+            StatusCode::ServiceUnavailable => 503,
+            StatusCode::GatewayTimeout => 504,
         }
     }
 
@@ -65,6 +77,9 @@ impl StatusCode {
             StatusCode::Created => "Created",
             StatusCode::NoContent => "No Content",
             StatusCode::BadRequest => "Bad Request",
+            StatusCode::BadGateway => "Bad Gateway",
+            StatusCode::ServiceUnavailable => "Service Unavailable",
+            StatusCode::GatewayTimeout => "Gateway Timeout",
             StatusCode::NotFound => "Not Found",
             StatusCode::MethodNotAllowed => "Method Not Allowed",
             StatusCode::InternalServerError => "Internal Server Error",
@@ -129,10 +144,26 @@ impl ResponseBuilder {
         self
     }
 
+    /// Adds or replaces a header (alias for fluent API).
+    pub fn with_header(self, key: impl Into<String>, value: impl Into<String>) -> Self {
+        self.header(key, value)
+    }
+
+    /// Sets multiple headers at once.
+    pub fn with_headers(mut self, headers: HashMap<String, String>) -> Self {
+        self.headers = headers;
+        self
+    }
+
     /// Sets the response body.
     pub fn body(mut self, body: Vec<u8>) -> Self {
         self.body = body;
         self
+    }
+
+    /// Sets the response body (alias for fluent API).
+    pub fn with_body(self, body: Vec<u8>) -> Self {
+        self.body(body)
     }
 
     /// Builds the final Response.
@@ -153,6 +184,11 @@ impl ResponseBuilder {
 }
 
 impl Response {
+    /// Creates a new response builder with the specified status code.
+    pub fn new(status: StatusCode) -> ResponseBuilder {
+        ResponseBuilder::new(status)
+    }
+
     /// Creates a simple 200 OK response with the given body.
     pub fn ok(body: impl Into<Vec<u8>>) -> Self {
         ResponseBuilder::new(StatusCode::Ok)

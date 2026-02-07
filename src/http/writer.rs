@@ -3,7 +3,7 @@ use tokio::net::TcpStream;
 use tokio::time::{Duration, timeout};
 const WRITE_TIMEOUT: Duration = Duration::from_secs(5);
 
-use crate::http::response::{Response, StatusCode};
+use crate::http::response::Response;
 
 const HTTP_VERSION: &str = "HTTP/1.1";
 

@@ -23,6 +23,25 @@ static_files:
   # Enable directory listing (not yet implemented)
   directory_listing: false
 
+# Reverse Proxy Configuration (Optional)
+# Uncomment the section below to enable reverse proxy mode
+# When enabled, all requests will be forwarded to configured backends
+proxy:
+  # List of backend servers
+  backends:
+    - url: "http://localhost:3000"
+      name: "backend-1"
+    - url: "http://localhost:3001"
+      name: "backend-2"
+    - url: "http://localhost:3002"
+      name: "backend-3"
+  
+  # Connection timeout in milliseconds (default: 5000)
+  connection_timeout_ms: 5000
+  
+  # Request timeout in milliseconds (default: 30000)
+  request_timeout_ms: 30000
+
 # Examples of paths that will be served:
 # Request: GET /           -> Serves: public/index.html
 # Request: GET /about.html -> Serves: public/about.html

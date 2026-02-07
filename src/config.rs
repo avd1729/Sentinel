@@ -1,6 +1,33 @@
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
 
+impl ProxyConfig {
+    /// Validate backend URLs
+    pub fn validate(&self) -> anyhow::Result<()> {
+        if self.backends.is_empty() {
+            anyhow::bail!("At least one backend must be configured");
+        }
+
+        for (idx, backend) in self.backends.iter().enumerate() {
+            // Basic URL validation
+            if !backend.url.starts_with("http://") && !backend.url.starts_with("https://") {
+                anyhow::bail!(
+                    "Backend {} URL must start with http:// or https://: {}",
+                    idx,
+                    backend.url
+                );
+            }
+
+            // Check URL can be parsed
+            if let Err(e) = url::Url::parse(&backend.url) {
+                anyhow::bail!("Backend {} has invalid URL '{}': {}", idx, backend.url, e);
+            }
+        }
+
+        Ok(())
+    }
+}
+
 /// Main configuration for the Sentinel server
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Config {
@@ -9,6 +36,10 @@ pub struct Config {
 
     /// Static file serving configuration
     pub static_files: StaticFilesConfig,
+
+    /// Reverse proxy configuration
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub proxy: Option<ProxyConfig>,
 }
 
 /// Server listening settings
@@ -48,8 +79,42 @@ pub struct ErrorPages {
     pub bad_request: Option<String>,
 }
 
+/// Reverse proxy configuration
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ProxyConfig {
+    /// List of backend servers
+    pub backends: Vec<BackendConfig>,
+
+    /// Connection timeout for backend servers (in milliseconds)
+    #[serde(default = "default_connection_timeout")]
+    pub connection_timeout_ms: u64,
+
+    /// Request timeout for backend servers (in milliseconds)
+    #[serde(default = "default_request_timeout")]
+    pub request_timeout_ms: u64,
+}
+
+/// Configuration for a backend server
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct BackendConfig {
+    /// Backend URL (e.g., "http://localhost:3000")
+    pub url: String,
+
+    /// Optional backend name for logging
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub name: Option<String>,
+}
+
 fn default_false() -> bool {
     false
+}
+
+fn default_connection_timeout() -> u64 {
+    5000 // 5 seconds
+}
+
+fn default_request_timeout() -> u64 {
+    30000 // 30 seconds
 }
 
 impl Config {
@@ -91,6 +156,7 @@ impl Config {
                 error_pages: ErrorPages::default(),
                 directory_listing: false,
             },
+            proxy: None,
         }
     }
 }
